@@ -5,16 +5,25 @@ require "logstash/json"
 require "logstash/namespace"
 
 
-# Todo add description
+# This codec decodes the incoming meesage into http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-bulk.html[Elasticsearch bulk format]
+# into individual events, and metadata into the `@metadata` field.
+#
+# Encoding is not supported.
 class LogStash::Codecs::BulkEs < LogStash::Codecs::Base
 
   # The codec name
   config_name "bulk_es"
 
+  private
+  def log_failure(message, opts)
+    @logger.error("[BulkES Json Parse Failure] #{message}", opts)
+  end
+
+  public
   def register
     @lines = LogStash::Codecs::Line.new
     @lines.charset = "UTF-8"
-    @state = :start
+    @state = :init
     @metadata = Hash.new
   end # def register
 
@@ -35,20 +44,25 @@ class LogStash::Codecs::BulkEs < LogStash::Codecs::Base
           end
           event.set("@metadata", @metadata)
           yield event
-          @state = :start
-        when :start
+          @state = :init
+        when :init
           @metadata = line[line.keys[0]]
           @metadata["action"] = line.keys[0].to_s
           @state = :metadata
-          if line.keys[0] == 'delete'
+          if @metadata["action"] == 'delete'
             event = LogStash::Event.new()
             event.set("@metadata", @metadata)
             yield event
-            @state = :start
+            @state = :init
           end
         end
+
       rescue LogStash::Json::ParserError => e
-        @logger.error("JSON parse failure. Bulk ES messages must in be UTF-8 JSON", :error => e, :data => data)
+        log_failure(
+          "messages must in be UTF-8 JSON format",
+          :error => e,
+          :data => data
+        )
       end
     end
   end # def decode
