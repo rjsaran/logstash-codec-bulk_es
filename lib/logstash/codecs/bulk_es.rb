@@ -24,7 +24,15 @@ class LogStash::Codecs::BulkEs < LogStash::Codecs::Base
         line = LogStash::Json.load(bulk_message.get("message"))
         case @state
         when :metadata
-          event = LogStash::Event.new(line)
+          if @metadata["action"] == 'update'
+             if line.has_key?("doc")
+               event = LogStash::Event.new(line["doc"])
+             elsif
+               event = LogStash::Event.new(line)
+             end
+          elsif
+            event = LogStash::Event.new(line)
+          end
           event.set("@metadata", @metadata)
           yield event
           @state = :start
