@@ -34,14 +34,22 @@ class LogStash::Codecs::BulkEs < LogStash::Codecs::Base
         case @state
         when :metadata
           if @metadata["action"] == 'update'
-             if line.has_key?("doc")
-               event = LogStash::Event.new(line["doc"])
-             elsif
-               event = LogStash::Event.new(line)
-             end
-          elsif
+            if line.has_key?("doc")
+              event = LogStash::Event.new(line["doc"])
+              if line.has_key?("doc_as_upsert")
+                @metadata["doc_as_upsert"] = line["doc_as_upsert"]
+              end
+            else
+              event = LogStash::Event.new(line)
+            end
+
+            if line.has_key?("upsert")
+              @metadata["upsert"] = LogStash::Json.dump(line["upsert"])
+            end
+          elsif #for action = index or create
             event = LogStash::Event.new(line)
           end
+
           event.set("@metadata", @metadata)
           yield event
           @state = :init
